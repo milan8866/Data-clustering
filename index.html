@@ -1,0 +1,306 @@
+<!doctype html>
+<html>
+<head>
+    <link rel="stylesheet" href="style.css" type="text/css" media="screen"/>
+    
+    <script src="d3-3-5-5.min.js"></script>
+    <script src="jquery.min.js"></script>
+</head>
+<body>
+	<div>
+		<div class="header">
+			<h1>Data Clustering</h1>
+		</div>
+	</div>
+    <div id='tooltip'>
+    </div>
+    <div id="main-wrapper">        
+        <div id="chart"></div>
+        <div class="clr"></div>
+    </div>
+
+<script>
+var width = 1240,
+    height = 800,
+    padding = 1,
+    maxRadius = 3;
+    color = {} ;
+
+var clusters = [];
+
+
+// Activity to put in center of circle arrangement
+
+var center_pt = { "x": 380, "y": 365 };
+
+var center_id = null;
+
+var div = d3.select("#tooltip")
+    .attr("class", "tooltip")               
+    .style("opacity", 0);
+
+var mpg = [];
+var year = [];
+var cylinders = [];
+
+
+
+
+// Start the SVG
+var svg = d3.select("#chart").append("svg")
+    .attr("width", width)
+    .attr("height", height);
+
+var randomColor = (function(){
+  var golden_ratio_conjugate = 0.618033988749895;
+  var h = Math.random();
+
+  var hslToRgb = function (h, s, l){
+      var r, g, b;
+
+      if(s == 0){
+          r = g = b = l; // achromatic
+      }else{
+          function hue2rgb(p, q, t){
+              if(t < 0) t += 1;
+              if(t > 1) t -= 1;
+              if(t < 1/6) return p + (q - p) * 6 * t;
+              if(t < 1/2) return q;
+              if(t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+              return p;
+          }
+
+          var q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+          var p = 2 * l - q;
+          r = hue2rgb(p, q, h + 1/3);
+          g = hue2rgb(p, q, h);
+          b = hue2rgb(p, q, h - 1/3);
+      }
+
+      return '#'+Math.round(r * 255).toString(16)+Math.round(g * 255).toString(16)+Math.round(b * 255).toString(16);
+  };
+  
+  return function(){
+    h += golden_ratio_conjugate;
+    h %= 1;
+    return hslToRgb(h, 0.5, 0.60);
+  };
+})();
+
+
+// Load data and let's do it.
+d3.csv("cars_dataset.csv", function(error, data) { 
+    if (error) {
+        return console.warn(error);
+    }
+    
+    data.forEach(function(d) {
+        var index = year.findIndex(x => x == d.Year);
+        if(index == -1) {
+            year.push(d.Year);            
+        } 
+        var index1 = mpg.findIndex(x => x == d.MPG);
+        if(index1 == -1) {
+            mpg.push(+d.MPG);
+        } 
+
+        var index2 = cylinders.findIndex(x => x == d.Cylinders);
+        if(index2 == -1) {
+            cylinders.push(+d.Cylinders);
+        } 
+    });
+    console.log('year', year);
+    
+    console.log('mpg', mpg);
+    console.log('mpg', d3.max(mpg));
+    console.log('mpg', d3.min(mpg));
+    console.log('cylinders', cylinders);
+
+    var year_threshold = [75, 82];
+    var mpg_threshold = [20, 50];
+    var cylinder_threshold = [5, 10];
+
+    data.forEach(function(d) {
+        for(var i=0; i < year_threshold.length; i++) {
+            if(+d.Year <= year_threshold[i]) {
+                d.subClusterId1 = i;
+                break;
+            }
+        }
+
+        for(var i=0; i < mpg_threshold.length; i++) {
+            if(+d.MPG <= mpg_threshold[i]) {
+                d.subClusterId2 = i;
+                break;
+            }
+        }
+
+        for(var i=0; i < cylinder_threshold.length; i++) {
+            if(+d.Cylinders <= cylinder_threshold[i]) {
+                d.subClusterId3 = i;
+                break;
+            }
+        }
+    });
+
+    for(var i=0; i < year_threshold.length; i++) {
+        for(var j=0; j < mpg_threshold.length; j++) {
+            for(var k=0; k < cylinder_threshold.length; k++) {
+                clusters.push({subId1: i, subId2: j, subId3: k })
+            }
+        }
+    }
+    console.log('clusters', clusters);
+
+    data.forEach(function(d) {
+        console.log('test');
+        for(var i=0; i < clusters.length; i++) {
+            // console.log('d', d);
+            // console.log('subClusterId1', d.subClusterId1);
+            // console.log('subClusterId2', d.subClusterId2);
+            // console.log('subClusterId3', d.subClusterId3);
+            if((d.subClusterId1 == clusters[i].subId1) && (d.subClusterId2 == clusters[i].subId2) && (d.subClusterId3 == clusters[i].subId3)) {
+                d.clusterId = i;                
+                break;
+            }
+        }
+    });
+
+    console.log('data', data);
+
+    // Coordinates for activities
+    var foci = [];
+    clusters.forEach(function(code, i) {
+        if (i == center_id) {
+            foci[i] = center_pt;
+        } else {
+            // var theta = 2 * Math.PI / (clusters.length);
+            // foci[i] = {x: 300 * Math.cos(i * theta)+380, y: 300 * Math.sin(i * theta)+365 };
+            foci[i] = {x: 400 * (i % (clusters.length/2))+ 150, y: 400 * Math.floor(i / (clusters.length/2)) + 200  };            
+        }
+
+        color[i] = randomColor();
+    });    
+
+    console.log('color', color);
+    var minClusterValue = d3.min(clusters);
+    console.log('min', minClusterValue);
+    console.log('foci', foci);
+    
+    // A node for each person's schedule
+    var nodes = data.map(function(o,i) {                     
+        var init_x = foci[o.clusterId].x + Math.random();
+        var init_y = foci[o.clusterId].y + Math.random();
+        return {
+            clusterId: o.clusterId,            
+            radius: 10,
+            x: init_x,
+            y: init_y,
+            color: color[o.clusterId],            
+            data: o
+        }
+    });
+
+    var force = d3.layout.force()
+        .nodes(nodes)
+        .size([width, height])
+        // .links([])
+        .gravity(0)
+        .charge(0)
+        .friction(.5)
+        .on("tick", tick)
+        .start();
+
+    var circle = svg.selectAll("circle")
+        .data(nodes)
+      .enter().append("circle")
+        .attr('cluster', function(d) {
+            return clusters[d.clusterId];
+        })
+        .attr("r", function(d) { return d.radius; })
+        .style("fill", function(d) { return d.color; })
+        .on("mouseover", function(d) {
+            d3.select(this).attr('opacity', 0.5);      
+            div.transition()        
+                .duration(200)      
+                .style("opacity", .9);      
+            var strHtml = '';
+            for(x in d.data) {
+                if((x != 'subClusterId1') && (x != 'subClusterId2') && (x != 'subClusterId3')) {
+                    strHtml += "<p>" + x + ": " + d.data[x] + "</p>";    
+                }                
+            }
+            
+            div.html(strHtml)  
+                .style("left", (d3.event.pageX + 20) + "px")     
+                .style("top", (d3.event.pageY - 28) + "px");    
+            })                  
+        .on("mouseout", function(d) {       
+            d3.select(this).attr('opacity', 1.0);
+            div.transition()        
+                .duration(500)      
+                .style("opacity", 0);   
+        })
+        // .call(force.drag);
+    
+    
+    
+        
+    function tick(e) {
+      var k = 0.04 * e.alpha;
+  
+      // Push nodes toward their designated focus.
+      nodes.forEach(function(o, i) {
+        var curr_act = o.act;
+        
+        // Make sleep more sluggish moving.
+        if (curr_act == "0") {
+            var damper = 0.6;
+        } else {
+            var damper = 1;
+        }
+        // o.color = color[o.clusterId];
+        o.y += (foci[o.clusterId].y - o.y) * k * damper;
+        o.x += (foci[o.clusterId].x - o.x) * k * damper;
+      });
+
+      circle
+          .each(collide(.5))
+          .style("fill", function(d) { return d.color; })
+          .attr("cx", function(d) { return d.x; })
+          .attr("cy", function(d) { return d.y; });
+    }
+
+
+    // Resolve collisions between nodes.
+    function collide(alpha) {
+      var quadtree = d3.geom.quadtree(nodes);
+      return function(d) {
+        var r = d.radius + maxRadius + padding,
+            nx1 = d.x - r,
+            nx2 = d.x + r,
+            ny1 = d.y - r,
+            ny2 = d.y + r;
+        quadtree.visit(function(quad, x1, y1, x2, y2) {
+          if (quad.point && (quad.point !== d)) {
+            var x = d.x - quad.point.x,
+                y = d.y - quad.point.y,
+                l = Math.sqrt(x * x + y * y),
+                r = d.radius + quad.point.radius + (d.act !== quad.point.act) * padding;
+            if (l < r) {
+              l = (l - r) / l * alpha;
+              d.x -= x *= l;
+              d.y -= y *= l;
+              quad.point.x += x;
+              quad.point.y += y;
+            }
+          }
+          return x1 > nx2 || x2 < nx1 || y1 > ny2 || y2 < ny1;
+        });
+      };
+    }
+});
+
+</script>
+</body>
+</html>
